@@ -1,20 +1,73 @@
-import time
 import numpy as np
+import pygame
 
-from copy import deepcopy
+
+class Color:
+    BLACK = pygame.Color(0, 0, 0)
+    WHITE = pygame.Color(255, 255, 255, 45)
+
+    BACKGROUND = pygame.Color(50, 50, 50)
+    MALE = pygame.Color(149, 202, 255)
+    FEMALE = pygame.Color(231, 84, 128)
+    FOOD = pygame.Color(237, 41, 57)
+
+
+class Cell:
+    def __init__(self):
+        self.fruits = []
+        self.organisms = []
+
+    def has_fruits(self):
+        return not self.fruits == []
+
+    def add_fruit(self, fruit):
+        self.fruits.append(fruit)
+
+    def remove_fruit(self, fruit):
+        self.fruits.remove(fruit)
+
+    def get_random_fruit(self):
+        return np.random.choice(self.fruits)
+
+    def has_organisms(self):
+        return not self.organisms == []
+
+    def add_organism(self, organism):
+        self.organisms.append(organism)
+
+    def remove_organism(self, organism):
+        self.organisms.remove(organism)
+
+    def get_random_organism(self):
+        return np.random.choice(self.organisms)
 
 
 class Environment:
     MIN_X = 0
-    MAX_X = 30
+    MAX_X = 100
     MIN_Y = 0
-    MAX_Y = 30
+    MAX_Y = 50
+    ORGANISM_SIZE = 10
 
-    def __init__(self, organism_model, initial_population):
+    def __init__(self, organism_model, initial_population, initial_food):
         self.organism_model = organism_model
         self.population = []
-        self.space = np.empty([self.MAX_X, self.MAX_Y], dtype=list)
+        # self.space = np.empty([self.MAX_X, self.MAX_Y], dtype=list)
+        self.space = []
+        for x in range(self.MAX_X):
+            row = []
+            for y in range(self.MAX_Y):
+                row.append(Cell())
+            self.space.append(row)
+
         self.current_iteration = 0
+        pygame.init()
+        screen_x = self.MAX_X * self.ORGANISM_SIZE
+        screen_y = self.MAX_Y * self.ORGANISM_SIZE
+        self.screen = pygame.display.set_mode((screen_x, screen_y))
+
+        for i in range(initial_food):
+            self._add_food()
 
         for i in range(initial_population):
             organism = self.organism_model(environment=self)
@@ -22,13 +75,10 @@ class Environment:
 
     def _add_organism(self, organism):
         self.population.append(organism)
-        if self.space[organism.x][organism.y]:
-            self.space[organism.x][organism.y].append(organism)
-        else:
-            self.space[organism.x][organism.y] = [organism]
+        self.space[organism.x][organism.y].add_organism(organism)
 
     def _remove_organism(self, organism):
-        self.space[organism.x][organism.y].remove(organism)
+        self.space[organism.x][organism.y].remove_organism(organism)
         self.population.remove(organism)
 
     def _move_organism(self, organism):
@@ -59,8 +109,9 @@ class Environment:
             )
             self._add_organism(o)
 
-    def _dispute(self, organisms):
+    def _dispute(self, cell):
         """ A list of organisms, sharing the same space """
+        organisms = cell.organisms
         if len(organisms) == 2:
             o1 = organisms[0]
             o2 = organisms[1]
@@ -71,20 +122,33 @@ class Environment:
         else:
             self._battle(organisms)
 
+    def _cell_color(self, cell):
+        if all([organism.sex == 'M' for organism in cell.organisms]):
+            return Color.MALE
+        if all([organism.sex == 'F' for organism in cell.organisms]):
+            return Color.FEMALE
+        return Color.WHITE
+
     def draw_information(self):
         print('Iteration: {}. Population: {}'.format(
             self.current_iteration, len(self.population)
         ))
 
     def draw_space(self):
-        for row in self.space:
-            for column in row:
-                msg = ' '
-                if column:
-                    msg = len(column)
-                print(msg, end='  ')  # noqa
-            print()
-        print()
+        self.screen.fill(Color.BACKGROUND)
+        for x, row in enumerate(self.space):
+            for y, cell in enumerate(row):
+                if not cell.has_organisms():
+                    continue
+                color = Color.WHITE
+                color = self._cell_color(cell)
+                size = len(cell.organisms)
+                center_point = (x * self.ORGANISM_SIZE, y * self.ORGANISM_SIZE)
+                radius = self.ORGANISM_SIZE * size // 2
+                pygame.draw.circle(
+                    self.screen, color, center_point, radius, 0
+                )
+        pygame.display.flip()
 
     def draw(self):
         self.draw_information()
@@ -100,13 +164,13 @@ class Environment:
         """
 
         for row in self.space:
-            for column in row:
-                if not column or len(column) == 0:
+            for cell in row:
+                if not cell.has_organisms():
                     continue
-                if len(column) == 1:
-                    self._move_organism(column[0])
+                if len(cell.organisms) == 1:
+                    self._move_organism(cell.get_random_organism())
                 else:
-                    self._dispute(column)
+                    self._dispute(cell)
 
 
 class Organism:
@@ -264,13 +328,16 @@ class Organism:
 
 
 if __name__ == '__main__':
-    ITERATIONS = 10
-    INITIAL_POPULATION = 10000
+    ITERATIONS = 100
+    INITIAL_POPULATION = 30
+    INITIAL_FOOD = 0
+    FPS = 10
 
-    environment = Environment(Organism, INITIAL_POPULATION)
+    environment = Environment(Organism, INITIAL_POPULATION, INITIAL_FOOD)
+    clock = pygame.time.Clock()
 
     for i in range(ITERATIONS):
         environment.iterate()
         environment.draw_information()
         environment.draw_space()
-        time.sleep(1)
+        clock.tick(FPS)
