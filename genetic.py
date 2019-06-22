@@ -90,7 +90,7 @@ class Environment:
         """
         A battle to the death. The loser gets removed from the population
         """
-        strengths = [o.get_strength() for o in organisms]
+        strengths = [o.strength for o in organisms]
         position_of_the_strongest = strengths.index(max(strengths))
 
         winner = organisms[position_of_the_strongest]
@@ -235,7 +235,7 @@ class Organism:
         return a random value
         """
         if self.has_parents:
-            att = (self.mother.get_speed() + self.father.get_speed()) / 2
+            att = (self.mother.speed + self.father.speed) / 2
         else:
             att = np.random.rand() * self.MAX_SPEED
         return att
@@ -246,7 +246,7 @@ class Organism:
         return a random value
         """
         if self.has_parents:
-            att = (self.mother.get_strength() + self.father.get_strength()) / 2
+            att = (self.mother.strength + self.father.strength) / 2
         else:
             att = np.random.rand() * self.MAX_STRENGTH
         return att
@@ -272,18 +272,6 @@ class Organism:
         else:
             att = int(np.random.rand() * self.environment.MAX_Y)
         return att
-
-    def get_speed(self):
-        return self.speed
-
-    def get_strength(self):
-        return self.strength
-
-    def get_x(self):
-        return self.x
-
-    def get_y(self):
-        return self.y
 
     @classmethod
     def share_family(cls, o1, o2):
