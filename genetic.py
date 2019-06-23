@@ -8,26 +8,26 @@ class Color:
 
     BACKGROUND = pygame.Color(50, 50, 50)
     MALE = pygame.Color(149, 202, 255)
-    FEMALE = pygame.Color(231, 84, 128)
+    FEMALE = pygame.Color(255, 192, 203)
     FOOD = pygame.Color(237, 41, 57)
 
 
 class Cell:
     def __init__(self):
-        self.fruits = []
+        self.foods = []
         self.organisms = []
 
-    def has_fruits(self):
-        return not self.fruits == []
+    def has_foods(self):
+        return not self.foods == []
 
-    def add_fruit(self, fruit):
-        self.fruits.append(fruit)
+    def add_food(self, food):
+        self.foods.append(food)
 
-    def remove_fruit(self, fruit):
-        self.fruits.remove(fruit)
+    def remove_food(self, food):
+        self.foods.remove(food)
 
-    def get_random_fruit(self):
-        return np.random.choice(self.fruits)
+    def get_random_food(self):
+        return np.random.choice(self.foods)
 
     def has_organisms(self):
         return not self.organisms == []
@@ -44,14 +44,20 @@ class Cell:
 
 class Environment:
     MIN_X = 0
-    MAX_X = 100
+    MAX_X = 160 - 16
     MIN_Y = 0
-    MAX_Y = 50
-    ORGANISM_SIZE = 10
+    MAX_Y = 90 - 9
+    CELL_SIZE = 12
+    ORGANISM_SIZE = 8
+    FOOD_SIZE = 4
 
-    def __init__(self, organism_model, initial_population, initial_food):
+    def __init__(
+        self, organism_model, food_model, initial_population, initial_food
+    ):
         self.organism_model = organism_model
+        self.food_model = food_model
         self.population = []
+        self.foods = []
         # self.space = np.empty([self.MAX_X, self.MAX_Y], dtype=list)
         self.space = []
         for x in range(self.MAX_X):
@@ -62,16 +68,25 @@ class Environment:
 
         self.current_iteration = 0
         pygame.init()
-        screen_x = self.MAX_X * self.ORGANISM_SIZE
-        screen_y = self.MAX_Y * self.ORGANISM_SIZE
-        self.screen = pygame.display.set_mode((screen_x, screen_y))
+        screen_x = self.MAX_X * self.CELL_SIZE
+        screen_y = self.MAX_Y * self.CELL_SIZE
+        self.screen = pygame.display.set_mode(
+            (screen_x, screen_y), flags=pygame.RESIZABLE
+        )
 
         for i in range(initial_food):
-            self._add_food()
+            food = self.food_model()
+            self._add_food(food)
 
         for i in range(initial_population):
             organism = self.organism_model(environment=self)
             self._add_organism(organism)
+
+    def _add_food(self, food):
+        x = int(np.random.rand() * self.MAX_X)
+        y = int(np.random.rand() * self.MAX_Y)
+        self.foods.append(food)
+        self.space[x][y].add_food(food)
 
     def _add_organism(self, organism):
         self.population.append(organism)
@@ -130,24 +145,33 @@ class Environment:
         return Color.WHITE
 
     def draw_information(self):
-        print('Iteration: {}. Population: {}'.format(
-            self.current_iteration, len(self.population)
+        average_strength = np.average([o.strength for o in self.population])
+        print('Iteration: {}. Population: {}. Average Strength: {}'.format(
+            self.current_iteration, len(self.population), average_strength,
         ))
 
     def draw_space(self):
         self.screen.fill(Color.BACKGROUND)
         for x, row in enumerate(self.space):
             for y, cell in enumerate(row):
-                if not cell.has_organisms():
-                    continue
-                color = Color.WHITE
-                color = self._cell_color(cell)
-                size = len(cell.organisms)
-                center_point = (x * self.ORGANISM_SIZE, y * self.ORGANISM_SIZE)
-                radius = self.ORGANISM_SIZE * size // 2
-                pygame.draw.circle(
-                    self.screen, color, center_point, radius, 0
-                )
+                if cell.has_organisms():
+                    color = self._cell_color(cell)
+                    size = len(cell.organisms)
+                    center_point = (x * self.CELL_SIZE,
+                                    y * self.CELL_SIZE)
+                    radius = self.ORGANISM_SIZE * size // 2
+                    pygame.draw.circle(
+                        self.screen, color, center_point, radius, 0
+                    )
+                if cell.has_foods():
+                    color = Color.FOOD
+                    center_point = (x * self.CELL_SIZE,
+                                    y * self.CELL_SIZE)
+                    radius = self.FOOD_SIZE // 2
+                    pygame.draw.circle(
+                        self.screen, color, center_point, radius, 0
+                    )
+
         pygame.display.flip()
 
     def draw(self):
@@ -177,8 +201,8 @@ class Organism:
     MUTATION_OPTIONS = [-1, 0, 1]
     MUTATION_PROBABILITIES = [0.4, 0.2, 0.4]
     FAMILY_GENERATIONS = 3
-    MIN_SPEED = 1
-    MAX_SPEED = 1
+    MIN_VISION = 1
+    MAX_VISION = 10
     MIN_STRENGTH = 0
     MAX_STRENGTH = 10
 
@@ -194,7 +218,7 @@ class Organism:
         if bool(mother) != bool(father):
             raise Exception
 
-        random_speed = self._random_attr()
+        random_vision = self._random_attr()
         random_strength = self._random_attr()
         random_x = self._random_attr()
         random_y = self._random_attr()
@@ -208,15 +232,15 @@ class Organism:
         self.x = self.parents_x() + int(random_x)
         self.y = self.parents_y() + int(random_y)
 
-        self.speed = self.parents_speed() + random_speed
-        self.strength = self.parents_strength() + random_strength
+        self.base_vision = self.parents_vision() + random_vision
+        self.base_strength = self.parents_strength() + random_strength
 
         # Normalize everything between MIN and MAX
-        self.speed = self._normalize(
-            self.speed, self.MIN_SPEED, self.MAX_SPEED,
+        self.base_vision = self._normalize(
+            self.base_vision, self.MIN_VISION, self.MAX_VISION,
         )
-        self.strength = self._normalize(
-            self.strength, self.MIN_STRENGTH, self.MAX_STRENGTH,
+        self.base_strength = self._normalize(
+            self.base_strength, self.MIN_STRENGTH, self.MAX_STRENGTH,
         )
         self.x = self._normalize(
             self.x, self.environment.MIN_X, self.environment.MAX_X - 1,
@@ -229,15 +253,15 @@ class Organism:
     def has_parents(self):
         return self.mother is not None and self.father is not None
 
-    def parents_speed(self):
+    def parents_vision(self):
         """
         Returns parents attribute, or, if the organism doesn't have parents,
         return a random value
         """
         if self.has_parents:
-            att = (self.mother.speed + self.father.speed) / 2
+            att = (self.mother.vision + self.father.vision) / 2
         else:
-            att = np.random.rand() * self.MAX_SPEED
+            att = np.random.rand() * self.MAX_VISION
         return att
 
     def parents_strength(self):
@@ -273,6 +297,14 @@ class Organism:
             att = int(np.random.rand() * self.environment.MAX_Y)
         return att
 
+    @property
+    def strength(self):
+        return self.base_strength
+
+    @property
+    def vision(self):
+        return self.base_vision
+
     @classmethod
     def share_family(cls, o1, o2):
         """True if they share family"""
@@ -301,10 +333,10 @@ class Organism:
 
     def move(self):
         new_x = self.x + int(np.round(
-            np.random.uniform(-self.speed, self.speed)
+            np.random.uniform(-1, 1)
         ))
         new_y = self.y + int(np.round(
-            np.random.uniform(-self.speed, self.speed)
+            np.random.uniform(-1, 1)
         ))
         self.x = self._normalize(
             new_x, self.environment.MIN_X, self.environment.MAX_X - 1,
@@ -315,13 +347,18 @@ class Organism:
         return self.x, self.y
 
 
-if __name__ == '__main__':
-    ITERATIONS = 100
-    INITIAL_POPULATION = 30
-    INITIAL_FOOD = 0
-    FPS = 10
+class Food:
+    def __init__(self):
+        self.type = 'fruit'
+        self.value = 10
 
-    environment = Environment(Organism, INITIAL_POPULATION, INITIAL_FOOD)
+if __name__ == '__main__':
+    ITERATIONS = 300
+    INITIAL_POPULATION = 300
+    INITIAL_FOOD = 10
+    FPS = 50
+
+    environment = Environment(Organism, Food, INITIAL_POPULATION, INITIAL_FOOD)
     clock = pygame.time.Clock()
 
     for i in range(ITERATIONS):
